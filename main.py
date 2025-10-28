@@ -48,7 +48,7 @@ try:
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY missing")
-    client = OpenAI(api_key=api_key)
+    client = OpenAI()
     logger.info("✅ OpenAI client initialized")
 except Exception as e:
     logger.error(f"❌ OpenAI init error: {e}")
