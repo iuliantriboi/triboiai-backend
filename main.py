@@ -30,7 +30,6 @@ app = FastAPI(
 ALLOWED_ORIGINS = [
     "https://triboiai.online",
     "https://www.triboiai.online",
-    # adaugă exact domeniul Pages dacă îl folosești (fără wildcard)
     "https://triboiai-online99.pages.dev",
     "http://localhost:3000",
     "http://localhost:5173",
