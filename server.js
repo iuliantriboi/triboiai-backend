@@ -1,5 +1,7 @@
 // ============================================
-// TRIBOI AI - LICENSE SYSTEM V3 (INTEGRATED)
+// TRIBOI AI - LICENSE SYSTEM V3 (CORRECTED)
+// ============================================
+// PUNE ACEST SCRIPT ÎN index.html, NU ÎN server.js!
 // ============================================
 
 (function() {
@@ -127,6 +129,9 @@
 
     // Device lock dezactivat temporar - va fi implementat cu backend
 
+    // 🔥 FIX: Verificăm dacă URMĂTOAREA întrebare ar depăși limita
+    // Deci dacă suntem la întrebarea 10, permitem să trimitem (devine 11)
+    // Abia la trimiterea următoarei (11 + 1 = 12) blocăm
     if (license.questionsUsed >= license.maxQuestions) {
       return { 
         valid: false, 
@@ -187,6 +192,7 @@
     if (license) {
       license.questionsUsed += 1;
       saveLicense(license);
+      console.log(`📊 Întrebări folosite: ${license.questionsUsed}/${license.maxQuestions}`);
     }
   }
 
@@ -626,38 +632,46 @@
   }
 
   // ============================================
-  // INTERCEPT QUESTIONS
+  // INTERCEPT QUESTIONS - 🔥 FIX AICI!
   // ============================================
 
   function interceptSendButton() {
     const btn = document.getElementById('triboiai-send');
     if (!btn) return;
 
+    // 🔥 FIX: Verificăm ÎNAINTE de a trimite întrebarea
     btn.addEventListener('click', function(e) {
       const status = checkStatus();
       
+      // Dacă licența e expirată ÎNAINTE de această întrebare, blocăm
       if (!status.valid) {
         e.stopImmediatePropagation();
+        e.preventDefault();
         lockWidget();
         showExpiredModal(status);
         return false;
       }
       
-      // Let the question go through, then increment
+      // Licența e validă, lăsăm întrebarea să treacă
+      // APOI incrementăm contorul
+      // 🔥 FIX: Folosim setTimeout mai lung pentru a aștepta răspunsul complet
       setTimeout(() => {
         incrementQuestions();
         updateStatusBar();
         
-        // Check if just expired
+        // 🔥 FIX: Verificăm DUPĂ incrementare dacă tocmai am expirat
+        // Deci la întrebarea 10, incrementăm la 10, verificăm (10 < 10 = false, deci OK)
+        // La întrebarea 11 (care ar fi a 11-a), incrementăm la 11, verificăm (11 >= 10 = true, BLOC!)
         const newStatus = checkStatus();
         if (!newStatus.valid) {
+          // Așteaptă puțin pentru ca utilizatorul să vadă răspunsul la ultima întrebare
           setTimeout(() => {
             lockWidget();
             showExpiredModal(newStatus);
-          }, 1000);
+          }, 1500); // 1.5 secunde delay pentru a vedea răspunsul
         }
-      }, 100);
-    }, true);
+      }, 500); // Așteaptă 0.5 secunde după trimiterea întrebării
+    }, true); // true = captură în faza de capturing (mai devreme)
   }
 
   // ============================================
@@ -665,7 +679,7 @@
   // ============================================
 
   function init() {
-    console.log('🔐 Triboi AI License System V3');
+    console.log('🔐 Triboi AI License System V3 (CORRECTED)');
 
     const status = checkStatus();
 
@@ -686,35 +700,38 @@
   }
 
   // ============================================
-  // ADMIN
+  // ADMIN - 🔥 NU FOLOSEȘTE 'window' DIRECT ÎN BACKEND!
   // ============================================
 
-  window.triboiAdmin = {
-    checkStatus: checkStatus,
-    clearLicense: () => {
-      clearLicense();
-      location.reload();
-    },
-    testCode: (code) => {
-      const result = validateCodePattern(code);
-      console.log('Validation:', result);
-      return result;
-    },
-    addQuestions: (n) => {
-      const license = getLicense();
-      if (license) {
-        license.questionsUsed = Math.max(0, license.questionsUsed - n);
-        saveLicense(license);
-        updateStatusBar();
-        console.log(`Added ${n} questions`);
+  // Verificăm dacă suntem în browser (există window)
+  if (typeof window !== 'undefined') {
+    window.triboiAdmin = {
+      checkStatus: checkStatus,
+      clearLicense: () => {
+        clearLicense();
+        location.reload();
+      },
+      testCode: (code) => {
+        const result = validateCodePattern(code);
+        console.log('Validation:', result);
+        return result;
+      },
+      addQuestions: (n) => {
+        const license = getLicense();
+        if (license) {
+          license.questionsUsed = Math.max(0, license.questionsUsed - n);
+          saveLicense(license);
+          updateStatusBar();
+          console.log(`Added ${n} questions`);
+        }
       }
-    }
-  };
-  
-  // Expose updateStatusBar for language switching
-  window.TriboiLicense = {
-    updateStatusBar: updateStatusBar
-  };
+    };
+    
+    // Expose updateStatusBar for language switching
+    window.TriboiLicense = {
+      updateStatusBar: updateStatusBar
+    };
+  }
 
   // ============================================
   // START
