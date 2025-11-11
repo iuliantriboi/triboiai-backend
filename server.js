@@ -5,7 +5,7 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
-import db from './database/index.js'; // <<— important: ESM cere calea explicită către index.js
+import db from './database.js'; // <- exista în același folder
 
 dotenv.config();
 
