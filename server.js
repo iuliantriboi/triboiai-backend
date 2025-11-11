@@ -179,71 +179,59 @@ app.get('/api/license/status/:code', async (req, res) => {
 });
 
 // ============================================
-// ADMIN: CREATE LICENSE
+// CHAT: forward la OpenAI (Assistants v2 via Responses API)
 // ============================================
 
-app.post('/api/admin/license/create', async (req, res) => {
+app.post('/api/chat', async (req, res) => {
   try {
-    const { code, type, questionsTotal } = req.body;
+    const { message } = req.body;
 
-    if (!code || !type || !questionsTotal) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Mesajul utilizatorului lipsește' });
+    }
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: 'Lipsește OPENAI_API_KEY în environment' });
+    }
+    if (!process.env.OPENAI_ASSISTANT_ID) {
+      return res.status(500).json({ error: 'Lipsește OPENAI_ASSISTANT_ID în environment' });
     }
 
-    if (!['BASIC', 'PREMIUM'].includes(type)) {
-      return res.status(400).json({ error: 'Invalid license type' });
-    }
-
-    // Check if license already exists
-    const existing = await db.getLicense(code);
-    if (existing) {
-      return res.status(400).json({ error: 'License code already exists' });
-    }
-
-    const license = await db.createLicense(code, type, questionsTotal);
-
-    res.json({
-      success: true,
-      license: {
-        code: license.code,
-        type: license.type,
-        questionsTotal: license.questions_total,
-        createdAt: license.created_at,
+    // Folosim fetch nativ (Node 18+); în Node 22 e global
+    const r = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
       },
+      body: JSON.stringify({
+        assistant_id: process.env.OPENAI_ASSISTANT_ID, // TriboiAI.Online din Platform
+        input: message
+      })
     });
-  } catch (error) {
-    console.error('License creation error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
-// ============================================
-// ADMIN: GET ALL LICENSES
-// ============================================
+    if (!r.ok) {
+      const text = await r.text();
+      console.error('OpenAI error:', text);
+      return res.status(502).json({ error: 'Eroare OpenAI', detail: text });
+    }
 
-app.get('/api/admin/licenses', async (_req, res) => {
-  try {
-    const licenses = await db.getAllLicenses();
+    const data = await r.json();
 
-    res.json({
-      success: true,
-      count: licenses.length,
-      licenses: licenses.map((l) => ({
-        code: l.code,
-        type: l.type,
-        questionsTotal: l.questions_total,
-        questionsUsed: l.questions_used,
-        questionsRemaining: l.questions_total - l.questions_used,
-        status: l.status,
-        createdAt: l.created_at,
-        activatedAt: l.activated_at,
-        expiresAt: l.expires_at,
-        lastUsedAt: l.last_used_at,
-      })),
-    });
-  } catch (error) {
-    console.error('Get licenses error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    // Extragem textul din Responses API
+    const output =
+      data?.output_text ||
+      (Array.isArray(data?.output)
+        ? data.output
+            .map(p => p?.content?.[0]?.text?.value)
+            .filter(Boolean)
+            .join('\n')
+        : null) ||
+      'Nu am primit un răspuns text.';
+
+    res.json({ ok: true, text: output });
+  } catch (err) {
+    console.error('Chat proxy error:', err);
+    res.status(500).json({ error: 'Eroare internă chat' });
   }
 });
 
