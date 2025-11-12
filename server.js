@@ -179,13 +179,12 @@ app.get('/api/license/status/:code', async (req, res) => {
 });
 
 // ============================================
-// CHAT: forward la OpenAI (Responses API) — minim
+// CHAT: forward la OpenAI (Responses API) — FINAL WORKING VERSION
 // ============================================
 
 app.post('/api/chat', async (req, res) => {
   try {
     const { message } = req.body;
-
     if (!message || !message.trim()) {
       return res.status(400).json({ error: 'Mesajul utilizatorului lipsește' });
     }
@@ -195,7 +194,7 @@ app.post('/api/chat', async (req, res) => {
 
     const payload = {
       model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
-      input: message,
+      input: [{ role: 'user', content: message }],
       ...(process.env.SYSTEM_PROMPT ? { instructions: process.env.SYSTEM_PROMPT } : {})
     };
 
@@ -208,19 +207,19 @@ app.post('/api/chat', async (req, res) => {
       body: JSON.stringify(payload)
     });
 
-    if (!r.ok) {
-      const text = await r.text();
-      console.error('OpenAI error:', text);
-      return res.status(502).json({ error: 'Eroare OpenAI', detail: text });
-    }
-
     const data = await r.json();
-    const output =
-      data?.output_text ||
-      (Array.isArray(data?.output)
-        ? data.output.map(p => p?.content?.[0]?.text?.value).filter(Boolean).join('\n')
-        : null) ||
-      'Nu am primit un răspuns text.';
+    console.log('OpenAI raw:', JSON.stringify(data, null, 2));
+
+    let output = 'Nu am primit un răspuns text.';
+    if (data?.output && Array.isArray(data.output)) {
+      const content = data.output
+        .map(p => p?.content?.map(c => c?.text?.value).filter(Boolean).join('\n'))
+        .filter(Boolean)
+        .join('\n');
+      if (content) output = content;
+    } else if (data?.output_text) {
+      output = data.output_text;
+    }
 
     res.json({ ok: true, text: output });
   } catch (err) {
