@@ -179,7 +179,7 @@ app.get('/api/license/status/:code', async (req, res) => {
 });
 
 // ============================================
-// CHAT: forward la OpenAI (Assistants v2 via Responses API)
+// CHAT: forward la OpenAI (Responses API)
 // ============================================
 
 app.post('/api/chat', async (req, res) => {
@@ -192,9 +192,19 @@ app.post('/api/chat', async (req, res) => {
     if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({ error: 'Lipsește OPENAI_API_KEY în environment' });
     }
-    if (!process.env.OPENAI_ASSISTANT_ID) {
-      return res.status(500).json({ error: 'Lipsește OPENAI_ASSISTANT_ID în environment' });
-    }
+
+    // Construim payload conform Responses API (fără assistant_id)
+    const payload = {
+      model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
+      input: message,
+    };
+
+    // (opțional) System prompt + sampling din env, dacă le ai setate
+    if (process.env.SYSTEM_PROMPT) payload.instructions = process.env.SYSTEM_PROMPT;
+    if (process.env.TEMPERATURE) payload.temperature = Number(process.env.TEMPERATURE);
+    if (process.env.TOP_P) payload.top_p = Number(process.env.TOP_P);
+    if (process.env.PRESENCE_PENALTY) payload.presence_penalty = Number(process.env.PRESENCE_PENALTY);
+    if (process.env.FREQUENCY_PENALTY) payload.frequency_penalty = Number(process.env.FREQUENCY_PENALTY);
 
     const r = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -202,13 +212,7 @@ app.post('/api/chat', async (req, res) => {
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        // model cerut de Responses API (fallback dacă nu ai OPENAI_MODEL setat)
-        model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
-        // rulează exact asistentul "TriboiAI.Online" din Platform
-        assistant_id: process.env.OPENAI_ASSISTANT_ID,
-        input: message
-      })
+      body: JSON.stringify(payload)
     });
 
     if (!r.ok) {
@@ -223,10 +227,7 @@ app.post('/api/chat', async (req, res) => {
     const output =
       data?.output_text ||
       (Array.isArray(data?.output)
-        ? data.output
-            .map(p => p?.content?.[0]?.text?.value)
-            .filter(Boolean)
-            .join('\n')
+        ? data.output.map(p => p?.content?.[0]?.text?.value).filter(Boolean).join('\n')
         : null) ||
       'Nu am primit un răspuns text.';
 
