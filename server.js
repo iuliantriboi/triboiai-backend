@@ -179,7 +179,7 @@ app.get('/api/license/status/:code', async (req, res) => {
 });
 
 // ============================================
-// CHAT: forward la OpenAI (Responses API) — FINAL WORKING VERSION
+// CHAT: forward la OpenAI (Responses API) — ROBUST
 // ============================================
 
 app.post('/api/chat', async (req, res) => {
@@ -192,9 +192,10 @@ app.post('/api/chat', async (req, res) => {
       return res.status(500).json({ error: 'Lipsește OPENAI_API_KEY în environment' });
     }
 
+    // Construim payload minimal acceptat de Responses API
     const payload = {
       model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
-      input: [{ role: 'user', content: message }],
+      input: message, // string simplu
       ...(process.env.SYSTEM_PROMPT ? { instructions: process.env.SYSTEM_PROMPT } : {})
     };
 
@@ -210,15 +211,35 @@ app.post('/api/chat', async (req, res) => {
     const data = await r.json();
     console.log('OpenAI raw:', JSON.stringify(data, null, 2));
 
-    let output = 'Nu am primit un răspuns text.';
-    if (data?.output && Array.isArray(data.output)) {
-      const content = data.output
-        .map(p => p?.content?.map(c => c?.text?.value).filter(Boolean).join('\n'))
-        .filter(Boolean)
-        .join('\n');
-      if (content) output = content;
-    } else if (data?.output_text) {
+    // Extracție robustă de text
+    let output = '';
+    // 1) câmpul convenabil
+    if (!output && typeof data?.output_text === 'string') {
       output = data.output_text;
+    }
+    // 2) content[].text.value (structura tipică)
+    if (!output && Array.isArray(data?.output)) {
+      const parts = [];
+      for (const p of data.output) {
+        if (Array.isArray(p?.content)) {
+          for (const c of p.content) {
+            const v = c?.text?.value || c?.text || c?.content || c?.data?.text;
+            if (typeof v === 'string') parts.push(v);
+          }
+        }
+      }
+      if (parts.length) output = parts.join('\n');
+    }
+    // 3) alte fallback-uri frecvente
+    if (!output && typeof data?.message?.content === 'string') {
+      output = data.message.content;
+    }
+    if (!output && Array.isArray(data?.choices) && data.choices[0]?.message?.content) {
+      output = data.choices[0].message.content;
+    }
+    // 4) ultim fallback: JSON întreg ca să vezi ce vine
+    if (!output) {
+      output = JSON.stringify(data);
     }
 
     res.json({ ok: true, text: output });
