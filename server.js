@@ -196,7 +196,6 @@ app.post('/api/chat', async (req, res) => {
       return res.status(500).json({ error: 'Lipsește OPENAI_ASSISTANT_ID în environment' });
     }
 
-    // Folosim fetch nativ (Node 18+); în Node 22 e global
     const r = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -204,7 +203,10 @@ app.post('/api/chat', async (req, res) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        assistant_id: process.env.OPENAI_ASSISTANT_ID, // TriboiAI.Online din Platform
+        // model cerut de Responses API (fallback dacă nu ai OPENAI_MODEL setat)
+        model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
+        // rulează exact asistentul "TriboiAI.Online" din Platform
+        assistant_id: process.env.OPENAI_ASSISTANT_ID,
         input: message
       })
     });
