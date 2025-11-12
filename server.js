@@ -179,7 +179,7 @@ app.get('/api/license/status/:code', async (req, res) => {
 });
 
 // ============================================
-// CHAT: forward la OpenAI (Responses API)
+// CHAT: forward la OpenAI (Responses API) — minim
 // ============================================
 
 app.post('/api/chat', async (req, res) => {
@@ -193,18 +193,11 @@ app.post('/api/chat', async (req, res) => {
       return res.status(500).json({ error: 'Lipsește OPENAI_API_KEY în environment' });
     }
 
-    // Construim payload conform Responses API (fără assistant_id)
     const payload = {
       model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
       input: message,
+      ...(process.env.SYSTEM_PROMPT ? { instructions: process.env.SYSTEM_PROMPT } : {})
     };
-
-    // (opțional) System prompt + sampling din env, dacă le ai setate
-    if (process.env.SYSTEM_PROMPT) payload.instructions = process.env.SYSTEM_PROMPT;
-    if (process.env.TEMPERATURE) payload.temperature = Number(process.env.TEMPERATURE);
-    if (process.env.TOP_P) payload.top_p = Number(process.env.TOP_P);
-    if (process.env.PRESENCE_PENALTY) payload.presence_penalty = Number(process.env.PRESENCE_PENALTY);
-    if (process.env.FREQUENCY_PENALTY) payload.frequency_penalty = Number(process.env.FREQUENCY_PENALTY);
 
     const r = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -222,8 +215,6 @@ app.post('/api/chat', async (req, res) => {
     }
 
     const data = await r.json();
-
-    // Extragem textul din Responses API
     const output =
       data?.output_text ||
       (Array.isArray(data?.output)
